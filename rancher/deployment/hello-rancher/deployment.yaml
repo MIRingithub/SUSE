@@ -23,9 +23,9 @@ spec:
             protocol: TCP
           env:
             - name: CONTAINER_COLOR
-              value: white
+              value: dark
             - name: TITLE
-              value: Hello Rancher              
+              value: Hello Rancher - SUSE SMI             
             - name: PETS
               value: whitecows   
           readinessProbe:
