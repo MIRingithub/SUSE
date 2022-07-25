@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-rancher
-  namespace: hello-rancher
+  name: hello-rancherv2
+  namespace: hello-rancherv2
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: hello-rancher
+      app: hello-rancherv2
   template:
     metadata:
       labels:
-        app: hello-rancher
+        app: hello-rancherv2
     spec:
       containers:
         - name: hello-rancher
