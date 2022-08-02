@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: hello-rancher
-  namespace: test
+  name: nginx1
 spec:
   type: LoadBalancer
+  #loadBalancerIP: <loadBalancerIP>      # for set static ip
   selector:
-    app: hello-rancher
+    app: nginx1
   ports:
   - port: 80
-    name: web
+    name: http
