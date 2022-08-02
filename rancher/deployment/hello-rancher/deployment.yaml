@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: hello-rancher
-  namespace: hello-rancher
+  namespace: test
 spec:
-  replicas: 5
+  replicas: 2
   selector:
     matchLabels:
       app: hello-rancher
@@ -25,7 +25,7 @@ spec:
             - name: CONTAINER_COLOR
               value: dark
             - name: TITLE
-              value: Hello Rancher - SUSE SMI             
+              value: Hello Rancher             
             - name: PETS
               value: whitecows   
           readinessProbe:
