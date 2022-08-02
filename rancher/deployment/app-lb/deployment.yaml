@@ -1,34 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-rancher
-  namespace: test
+  name: nginx1
 spec:
-  replicas: 2
   selector:
     matchLabels:
-      app: hello-rancher
+      app: nginx1
+  replicas: 2
   template:
     metadata:
       labels:
-        app: hello-rancher
+        app: nginx1
     spec:
       containers:
-        - name: hello-rancher
-          image: peteindockerhub/hello-rancher:1.0.2
-          imagePullPolicy: Always
-          ports:
-          - containerPort: 8080
-            name: web
-            protocol: TCP
-          env:
-            - name: CONTAINER_COLOR
-              value: dark
-            - name: TITLE
-              value: Hello Rancher             
-            - name: PETS
-              value: whitecows   
-          readinessProbe:
-            httpGet:
-              port: web
-              path: /
+      - name: nginx1
+        image: nginx:latest
+        ports:
+        - containerPort: 80
