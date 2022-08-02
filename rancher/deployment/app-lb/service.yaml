@@ -9,4 +9,4 @@ spec:
     app: hello-rancher
   ports:
   - port: 80
-    name: http
+    name: web
