@@ -1,1 +1,322 @@
+==============================================================================================================================================================================
+source RKE2 :
+https://github.com/SUSE/suse-at-home/blob/main/install/InstallRKE2onSLE.md 
+https://infohub.delltechnologies.com/l/rancher-prime-and-rke2-kubernetes-cluster-in-apex-private-cloud-with-powerprotect-data-manager-1/solution-architecture-193
+https://rke.docs.rancher.com/managing-clusters#:~:text=In%20order%20to%20add%20additional,list%20in%20the%20original%20cluster
+http://ranchermanager.docs.rancher.com/how-to-guides/new-user-guides/kubernetes-cluster-setup/rke2-for-rancher
+https://ranchergovernment.com/blog/article-simple-rke2-longhorn-and-rancher-install
+https://github.com/clemenko/rke_install_blog#whoami
 
+This guide can use for OpenSUSE Leap & Suse Linux Enterprise Server v15 :
+
+==============================================================================================================================================================================
+#---- Tes skenario non-HA
+1x VM for RMS
+1x VM for cluster1-node
+1x VM for cluster2-node
+
+# Skenario1 - working fine
+- all OS use SLES 15.4
+- un-ceklis allow tcp forwarding at nic config
+- upstream cluster with RKE2 v1.25 & running rms 2.7.5
+- create downstream cluster with RKE2 v1.26 with network provider calico
+    butuh sekitar 2.5Gb
+
+# Skenario2 - working fine
+- all OS use SLES 15.4
+- un-ceklis allow tcp forwarding at nic config
+- install RKE2 v1.25 utk upstream dan running rms 2.7.5
+- create downstream cluster with RKE1 v1.26 & docker v23 with network provider calico
+    butuh sekitar 2Gb
+    
+#---- Tes skenario with HA
+3x VM for RMS
+3x VM for cluster1-node
+3x VM for cluster2-node
+
+# Skenario1 - working fine
+- all OS use SLES 15.4
+- un-ceklis allow tcp forwarding at nic config
+- upstream cluster with RKE2 v1.25 & running rms 2.7.5
+- create downstream cluster with RKE2 v1.26 with network provider calico
+    butuh sekitar 2.5Gb
+
+# Skenario2 - working fine
+- all OS use SLES 15.4
+- un-ceklis allow tcp forwarding at nic config
+- install RKE2 v1.25 utk upstream dan running rms 2.7.5
+- create downstream cluster with RKE1 v1.26 & docker v23 with network provider calico
+    butuh sekitar 2Gb    
+
+#---- HAProxy if need | install in OpenSUSE Leap 15.5 after RMS Ready
+https://www.suse.com/support/kb/doc/?id=000020175
+https://ranchermanager.docs.rancher.com/v2.0-v2.4/how-to-guides/new-user-guides/migrate-from-v1.6-v2.x/load-balancing
+
+zypper -n install haproxy
+systemctl enable haproxy
+systemctl start haproxy
+
+==============================================================================================================================================================================
+#---- System Requiment
+rancher-1 s/d 3 - SLES 15 SP3
+    4c proc, 8gb ram, 50gb ssd disk, noswap
+no SWAP
+disable kdump
+
+# Resize disk root after install if use BTRFS
+lvdisplay | grep Path
+lvextend -l +100%FREE /dev/system/root
+btrfs filesystem resize max /
+df -hT | head -10
+
+# DNS Server for add A/PTR record
+# DNS Server must have internet access also
+# for RMS domain
+192.168.1.111  rancher.pocrancher.local          	rancher            	# for resolve RKE2 cluster and RMS installation
+
+# for upstream node
+192.168.1.111  rancher-node1.pocrancher.local    	rancher-node1
+192.168.1.112  rancher-node2.pocrancher.local    	rancher-node2
+192.168.1.113  rancher-node3.pocrancher.local    	rancher-node3
+
+# for downstream node
+192.168.1.116  cluster1-node1.pocrancher.local    	cluster1-node1
+192.168.1.117  cluster1-node2.pocrancher.local    	cluster1-node2
+192.168.1.118  cluster1-node3.pocrancher.local    	cluster1-node3
+
+==============================================================================================================================================================================
+#---- Initial setup for all node
+Enable root user
+Enable ssh
+systemctl stop firewalld
+systemctl disable firewalld
+iptables -F
+iptables-save
+iptables -L -n --line-numbers
+
+SSH config :
+vi /etc/ssh/sshd_config
+Port22
+PermitRootLogin yes
+IgnoreUserKnownHosts no
+PasswordAuthentication yes
+AllowTcpForwarding yes
+
+ALL Node | Disable firewalld and apparmor as root (if not already disabled):
+sudo -i
+systemctl disable apparmor.service
+systemctl disable firewalld.service
+systemctl stop apparmor.service
+systemctl stop firewalld.service
+
+ALL Node | Make sure that SWAP is disabled and not running. If swap has not been removed from the disk proposal on the install, do the following:
+systemctl disable swap.target
+swapoff -a
+
+#-- if use template SMTS, start here
+edit IP
+    Setting static IP & in routing please un-check ipv4 & ipv6
+edit /etc/hostname
+cek /etc/resolv.conf
+reboot
+
+#-- Activate RegCode if use SLES
+Request active code subscription *bisa trial mode, 60 hari
+SLES reg code:
+SUSEConnect -r <your-reg-code> -e <your-email>
+
+cek reg code: 
+SUSEConnect --status-text
+
+install additional tools :
+SUSEConnect --product PackageHub/15.4/x86_64
+zypper -n install iftop
+zypper -n install dstat
+zypper -n install htop
+
+#zypper search htop
+#zypper info htop
+
+config ntp :
+zypper -n install chrony
+vi /etc/chrony.conf
+# line 3: change servers for synchronization (replace to your timezone's one)
+#! pool pool.ntp.org iburst
+pool 0.id.pool.ntp.org iburst
+pool 1.id.pool.ntp.org iburst
+
+systemctl start chronyd
+systemctl enable chronyd
+chronyc sources
+
+Generate SSH for less login | ALL Node :
+1. Generate SSH (all node):
+ssh-keygen
+
+2. Copy keygen SSH for all node:
+ssh-copy-id -i ~/.ssh/id_rsa.pub rancher.pocrancher.local
+ssh-copy-id -i ~/.ssh/id_rsa.pub rancher-node1.pocrancher.local
+ssh-copy-id -i ~/.ssh/id_rsa.pub rancher-node2.pocrancher.local
+ssh-copy-id -i ~/.ssh/id_rsa.pub rancher-node3.pocrancher.local
+
+ssh-copy-id -i ~/.ssh/id_rsa.pub cluster1-node1.pocrancher.local
+ssh-copy-id -i ~/.ssh/id_rsa.pub cluster1-node2.pocrancher.local
+ssh-copy-id -i ~/.ssh/id_rsa.pub cluster1-node3.pocrancher.local
+
+# if need docker for RKE1
+SUSEConnect -p sle-module-containers/15.4/x86_64 -r ''
+zypper -n install docker
+systemctl start docker
+systemctl enable docker
+systemctl status docker
+
+==============================================================================================================================================================================
+#---- Create a Kubernetes cluster for RMS baseon RKE2 | running on Upstream node
+# only for Upstream cluster
+# RKE2 hanya support RMS 2.6.7 ke atas
+#In this Rodeo we want to create a single node Kubernetes cluster on the Rancher01 VM in order to install Rancher into it. This can be accomplished with the default RKE2 installation script:
+
+1. ALL Node | Download and install RKE2. In SLES, this script will download the RKE2 tarballs, extract in a /tmp directory, and subsequently copy them to their final locations:
+curl -sfL https://get.rke2.io |sh -
+#curl -sfL https://get.rke2.io | INSTALL_RKE2_VERSION=v1.24.10+rke2r1 sh -
+
+2. For Node1 only | Create the folder /etc/rancher/rke2:
+mkdir -p /etc/rancher/rke2
+
+3. For Node1 only | navigate to the newly created folder and create a config.yaml file:
+cd /etc/rancher/rke2
+cat > config.yaml <<EOF
+token: my-shared-secret
+tls-san:
+  - rancher.pocrancher.local
+  - rancher-node1.pocrancher.local
+  - rancher-node2.pocrancher.local
+  - rancher-node3.pocrancher.local
+EOF
+
+4. For Node1 only | Enable & start service:
+systemctl enable rke2-server.service
+systemctl start rke2-server.service
+
+#You can follow the logs with
+sudo journalctl -u rke2-server -f
+
+5. in Node1 | install & config kubectl run:
+cd
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+mkdir -p ~/.kube
+ln -s /etc/rancher/rke2/rke2.yaml ~/.kube/config
+
+kubectl get nodes -o wide
+kubectl get pods --all-namespaces -o wide
+kubectl get componentstatuses
+
+#---- if upstream only 1 node, skip this step
+#-- For Node2 & 3
+# install rke2
+curl -sfL https://get.rke2.io |sh -
+
+# Create the folder /etc/rancher/rke2
+mkdir -p /etc/rancher/rke2
+
+# create a config.yaml file
+cd /etc/rancher/rke2
+cat > config.yaml <<EOF
+server: https://rancher.pocrancher.local:9345
+token: my-shared-secret
+tls-san:
+  - rancher.pocrancher.local
+  - rancher-node1.pocrancher.local
+  - rancher-node2.pocrancher.local
+  - rancher-node3.pocrancher.local
+EOF
+
+#-- start services rke2
+systemctl enable rke2-server.service
+systemctl start rke2-server.service
+
+#You can follow the logs with
+sudo journalctl -u rke2-server -f
+
+==============================================================================================================================================================================
+#---- RMS Install - only running with SLES
+# Process in Node1
+1. Install Helm:
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+helm version --client
+
+2. Add repo and create namespace cattle-system for RMS instance:
+helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+#helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
+kubectl create namespace cattle-system
+
+3. Apply the certification manager file. In this case, we are using v1.0.4 but the newer version will work as well:
+#chart requires kubeVersion: >= 1.21.0
+#kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v1.5.1/cert-manager.crds.yaml
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
+
+4. Create the cert-manager namespace for cert manager rancher:
+kubectl create namespace cert-manager
+
+5. Add jetstack repository:
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
+6. Helm install the certificate manager in a new namespace called cert-manager:
+helm install cert-manager jetstack/cert-manager \
+--namespace cert-manager \
+--create-namespace \
+--version v1.11.0
+
+7. Verify that the cert-manager pods are running:
+kubectl get pods --namespace cert-manager
+
+8. Install the latest rancher in the cattle-system namespace and set the hostname:
+helm install rancher rancher-stable/rancher \
+--namespace cattle-system \
+--set hostname=rancher.pocrancher.local \
+--version v2.7.5 \
+--set replicas=3
+
+#helm install rancher rancher-stable/rancher \
+#--namespace cattle-system \
+#--set hostname=rancher.pocrancher.local \
+#--set global.cattle.psp.enabled=false \
+#--version v2.7.2 \
+#--set replicas=1
+
+# Verify rancher ready
+while true; do curl -kv https://rancher.pocrancher.local 2>&1 | grep -q "dynamiclistener-ca"; if [ $? != 0 ]; then echo "Rancher isn't ready yet"; sleep 5; continue; fi; break; done; echo "Rancher is Ready";
+
+# Pastikan pod di cert-manager & cattle-system running/completed
+kubectl get pods --namespace cert-manager
+kubectl get pods --namespace cattle-system
+kubectl -n cattle-system get deploy rancher
+
+9. makesure your pod at namespaces cert-manager & cattle-system running/completed:
+kubectl -n cattle-system rollout status deploy/rancher
+
+==============================================================================================================================================================================
+#---- Troubleshoot usecase RKE1
+[Disconnected] Cluster agent is not connected
+download kubeconfig cluster nya
+kubectl --kubeconfig cluster2.yaml get all -n cattle-system
+kubectl --kubeconfig cluster2.yaml logs pod/cattle-cluster-agent-78c9f6577d-q5zqd -n cattle-system
+    Use the following workaround in case the cattle-cluster-agent doesn’t start (ERROR: https://rancher.poc.local/ping is not accessible (Failed to connect to rancher.poc.local port 443: Connection refused)).
+kubectl --kubeconfig cluster2.yaml edit deployment cattle-cluster-agent -n cattle-system
+#Find dnsPolicy: ClusterFirst       << command this line
+#Change it to dnsPolicy: Default    << command this line
+
+# helm command
+helm ls --all-namespaces
+helm repo list
+helm search repo rancher-stable/rancher
+helm search repo --versions
+helm show chart stable/docker-registry
+helm install registry stable/docker-registry
+helm status <nama package> -n <nama namespace>
+helm uninstall <nama package> -n <nama namespace>
+
+# for check connectio
+curl -kv https://rancher.pocrancher.local:9345
